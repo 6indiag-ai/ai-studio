@@ -1,6 +1,6 @@
 // assets/js/studio.js
-const API_BASE = "https://ai-backend-studio.onrender.com"; // ← your Render backend
-let token = "demo-token"; // optional, demo token
+const API_BASE = "https://ai-backend-studio.onrender.com";  // Render backend
+let token = "demo-token"; // optional
 
 const fileInput = document.getElementById('fileInput');
 const preview = document.getElementById('preview');
@@ -10,88 +10,78 @@ let currentBlob = null;
 fileInput.addEventListener('change', (e)=>{
   const f = e.target.files[0];
   preview.innerHTML = '';
-  if(!f){ preview.innerHTML = '<span class="text-gray-400">No file selected</span>'; return;}
-  if(f.type.startsWith('image/')){
-    const img=document.createElement('img');
-    img.src=URL.createObjectURL(f);
-    img.className='max-h-48 object-contain';
+  if (!f) { preview.innerHTML = 'No file selected'; return; }
+
+  if (f.type.startsWith('image/')) {
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(f);
+    img.className = 'max-h-48 object-contain';
     preview.appendChild(img);
-  } else if(f.type.startsWith('video/')){
-    const v=document.createElement('video');
-    v.src=URL.createObjectURL(f);
-    v.controls=true;
-    v.className='max-h-48';
+  } 
+  else if (f.type.startsWith('video/')) {
+    const v = document.createElement('video');
+    v.src = URL.createObjectURL(f);
+    v.controls = true;
+    v.className = 'max-h-48';
     preview.appendChild(v);
-  } else {
-    preview.textContent='Unsupported file type';
+  } 
+  else {
+    preview.textContent = 'Unsupported file';
   }
-  log.textContent = "File ready: " + f.name;
   currentBlob = f;
+  log.textContent = "File selected: " + f.name;
 });
 
-async function callApi(action, expectBlob = true){
-  if(!currentBlob){ alert("Please upload a file first"); return; }
+async function callApi(action){
+  if (!currentBlob) return alert("Please upload a file");
+
   const fd = new FormData();
   fd.append("file", currentBlob);
 
-  log.textContent = "Uploading & processing...";
+  log.textContent = "Processing... please wait";
 
-  try{
+  try {
     const res = await fetch(`${API_BASE}/api/process/${action}`, {
       method: "POST",
       headers: { "Authorization": "Bearer " + token },
       body: fd
     });
 
-    const json = await res.json();
-
-    if(!res.ok){
-      console.error("API error:", json);
-      log.textContent = "❌ Error: " + (json.message || "Server returned error");
+    const data = await res.json();
+    if (!res.ok) {
+      log.textContent = "❌ Error: " + (data.message || "Server error");
       return;
     }
 
-    // server returns JSON { message, result: "/results/filename" }
-    const resultPath = json.result;
-    const resultUrl = API_BASE + resultPath;
+    const resultUrl = API_BASE + data.result;
+    log.innerHTML = `✔ Done — <a href="${resultUrl}" target="_blank" class="text-blue-600 underline">Download Result</a>`;
 
-    // Open download link + preview
-    log.innerHTML = `Done — <a href="${resultUrl}" target="_blank" class="text-blue-600 underline">Download result</a>`;
+    // Show preview
+    const blobRes = await fetch(resultUrl);
+    const blob = await blobRes.blob();
+    preview.innerHTML = '';
 
-    // try to show preview by fetching as blob
-    if(expectBlob){
-      try{
-        const bres = await fetch(resultUrl);
-        if(bres.ok){
-          const blob = await bres.blob();
-          preview.innerHTML = '';
-          if(blob.type.startsWith('image/') || action.includes('image') || action.includes('remove')){
-            const img = document.createElement('img');
-            img.src = URL.createObjectURL(blob);
-            img.className='max-h-48 object-contain';
-            preview.appendChild(img);
-          } else {
-            const v = document.createElement('video');
-            v.src = URL.createObjectURL(blob);
-            v.controls = true;
-            v.className='max-h-48';
-            preview.appendChild(v);
-          }
-        }
-      }catch(e){
-        // preview fetch may fail for non-file returns; ignore
-        console.warn("Preview fetch failed", e);
-      }
+    if (blob.type.startsWith("image/")) {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(blob);
+      img.className = 'max-h-48 object-contain';
+      preview.appendChild(img);
+    } else {
+      const v = document.createElement('video');
+      v.src = URL.createObjectURL(blob);
+      v.controls = true;
+      v.className = 'max-h-48';
+      preview.appendChild(v);
     }
 
-  }catch(err){
-    console.error(err);
-    log.textContent = "❌ Network or server error — check backend";
+  } catch (e) {
+    log.textContent = "❌ Network / Backend error";
+    console.error(e);
   }
 }
 
-// connect buttons
-document.getElementById('btnRemove').onclick = ()=> callApi("remove-bg", true);
-document.getElementById('btnEnhance').onclick = ()=> callApi("enhance-image", true);
-document.getElementById('btnUpscale').onclick = ()=> callApi("upscale-image", true);
-document.getElementById('btnSubtitle').onclick = ()=> callApi("video_subtitle", false);
+// buttons
+document.getElementById('btnRemove').onclick   = ()=> callApi("remove-bg");
+document.getElementById('btnEnhance').onclick  = ()=> callApi("enhance-image");
+document.getElementById('btnUpscale').onclick  = ()=> callApi("upscale-image");
+document.getElementById('btnSubtitle').onclick = ()=> callApi("video_subtitle");
